@@ -1,7 +1,5 @@
 #include <Update.h>
-
-
-const char* passwordHash = "72ae575e33508b334aa2bed6d3613ea7";
+#include "Env.h"
 
 /*
  * Server Index Page
@@ -16,6 +14,10 @@ const char serverIndex[] PROGMEM = R"rawliteral(
     <input type="file" name="update" class="px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500" />
     <input type="submit" value="Update" class="px-4 py-2 bg-blue-500 text-white font-bold rounded hover:bg-blue-600 cursor-pointer" />
   </form>
+
+  <div id="error-message" class="hidden mt-2 p-2 bg-red-100 border border-red-400 text-red-700 rounded w-64">
+    Incorrect password. Please try again.
+  </div>
   
   <div class="mt-4 w-64">
     <div class="flex items-center justify-between mb-1">
@@ -32,6 +34,15 @@ const char serverIndex[] PROGMEM = R"rawliteral(
   function updateProgress(percent) {
     document.getElementById('prg-text').textContent = percent + '%';
     document.getElementById('prg-bar').style.width = percent + '%';
+  }
+
+  function showError(message) {
+    const errorDiv = document.getElementById('error-message');
+    errorDiv.textContent = message || 'Incorrect password. Please try again.';
+    errorDiv.classList.remove('hidden');
+    setTimeout(() => {
+      errorDiv.classList.add('hidden');
+    }, 5000); // Hide after 5 seconds
   }
 
   $('form').submit(function(e){
@@ -57,8 +68,14 @@ const char serverIndex[] PROGMEM = R"rawliteral(
       success: function(d, s) {
         console.log('success!')
       },
-      error: function (a, b, c) {
-        console.error('Error during upload', a, b, c);
+      error: function (xhr, status, error) {
+        console.error('Error during upload', xhr, status, error);
+        if (xhr.status === 401) {
+          showError('Authentication failed: Incorrect password');
+          updateProgress(0); // Reset progress bar
+        } else {
+          showError('Upload failed: ' + (xhr.responseText || error));
+        }
       }
     });
   });
@@ -87,7 +104,7 @@ void initOTA() {
         // The password is sent as a form field before the file upload begins
         if (server.hasArg("password")) {
           String password = server.arg("password");
-          if (password.equals(passwordHash)) {
+          if (password.equals(otaPassword)) {
             isAuthenticated = true;
           }
         }
@@ -95,6 +112,7 @@ void initOTA() {
         if (!isAuthenticated) {
           Update.end(true);
           Serial.println("Authentication failed - incorrect password");
+          server.send(401, "text/plain", "Unauthorized: Incorrect password");
           return;
         }
 

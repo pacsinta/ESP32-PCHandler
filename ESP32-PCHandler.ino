@@ -2,6 +2,7 @@
 #include <NetworkClient.h>
 #include <WebServer.h>
 #include <ESPmDNS.h>
+#include <ESPping.h>
 #include "Env.h"
 
 WebServer server(80);
@@ -12,7 +13,9 @@ const int ledPin = 2;
 unsigned long prevTime = 0;
 bool ledOn = false;
 
-void handleRoot() {
+void handlePcSwitch() {
+  digitalWrite(ledPin, 1);
+
   digitalWrite(pcPowerPin, 1);
   server.send(200, "text/plain", "hello from esp32!");
   delay(100);
@@ -20,10 +23,18 @@ void handleRoot() {
   digitalWrite(pcPowerPin, 0);
 
   delay(1000 * 60);
+
+  digitalWrite(ledPin, 0);
+}
+
+void getStatus() {
+  bool ret = Ping.ping(ip);
+  String statusText = "The PC status is: ";
+  statusText += ret ? "On" : "Off";
+  server.send(404, "text/plain", statusText);
 }
 
 void handleNotFound() {
-  digitalWrite(pcPowerPin, 1);
   String message = "File Not Found\n\n";
   message += "URI: ";
   message += server.uri();
@@ -36,7 +47,6 @@ void handleNotFound() {
     message += " " + server.argName(i) + ": " + server.arg(i) + "\n";
   }
   server.send(404, "text/plain", message);
-  digitalWrite(pcPowerPin, 0);
 }
 
 void setup(void) {
@@ -71,7 +81,8 @@ void setup(void) {
     Serial.println("MDNS responder started");
   }
 
-  server.on("/pcon", handleRoot);
+  server.on("/pcon", handlePcSwitch);
+  server.on("/status", getStatus);
 
   server.onNotFound(handleNotFound);
 
